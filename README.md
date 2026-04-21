@@ -1,66 +1,218 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Capella Credit — Sistem Pengajuan Kredit Internal
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Prototype internal tool untuk PT Capella Multidana dalam mengelola pengajuan kredit nasabah. Dibangun sebagai bagian dari *Coding Test — IT Department*.
 
-## About Laravel
+---
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## Tech Stack
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+| Layer      | Teknologi                          |
+|------------|------------------------------------|
+| Backend    | PHP 8.2 · Laravel 11               |
+| Frontend   | React 19 · Inertia.js              |
+| Styling    | Tailwind CSS v4                    |
+| Build Tool | Vite 5                             |
+| Icons      | Lucide React                       |
+| Toast      | Sonner                             |
+| Database   | MySQL (via Laragon)                |
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+---
 
-## Learning Laravel
+## Fitur Aplikasi
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+### Layout & UX
+- Sidebar dark collapsible (expand `w-56` / collapse `w-16`) dengan toggle hamburger di topbar
+- Navigasi SPA tanpa full reload (Inertia.js) dengan progress bar biru di atas halaman
+- Skeleton loading otomatis saat berpindah halaman
+- Mobile drawer sidebar dengan backdrop overlay
+- Tooltip icon saat sidebar dalam mode collapsed
+- Semua scrollbar disembunyikan (clean UI)
 
-You may also try the [Laravel Bootcamp](https://bootcamp.laravel.com), where you will be guided through building a modern Laravel application from scratch.
+### Dashboard
+- Kartu ringkasan: Total Pengajuan, Pending, Disetujui, Ditolak, Total Nominal Disetujui
+- Tabel 5 pengajuan terbaru dengan link ke halaman lengkap
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+### Pengajuan Kredit
+- Form dengan field: NIK (16 digit), nama, tipe, nominal, tenor, pendapatan, catatan
+- **Simulasi cicilan real-time** — tagihan/bulan dan rasio cicilan/pendapatan muncul otomatis
+- Preset tenor cepat: 6 / 12 / 18 / 24 bulan
+- Validasi error tampil sebagai toast notifikasi
 
-## Laravel Sponsors
+### Daftar Pengajuan
+- Tabel lengkap dengan kolom NIK (font mono)
+- **Filter** berdasarkan status via kartu statistik interaktif
+- **Pencarian** NIK, nama, atau tipe pengajuan
+- **Sorting** per kolom (nama, tipe, nominal, tagihan, status)
+- Menu aksi ⋯ per baris: Detail, Setujui, Tolak (Setujui/Tolak hanya muncul untuk status Pending)
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+### Detail Pengajuan
+- Informasi nasabah: nama, NIK, tipe, tanggal, nominal, tenor, pendapatan
+- Kalkulasi tagihan per bulan (nominal ÷ tenor)
+- Indikator rasio cicilan/pendapatan (hijau < 30%, kuning 30–50%, merah > 50%)
+- **Jadwal cicilan bulanan** dengan tanggal jatuh tempo dan sisa pinjaman (collapsible)
+- Tombol Setujui / Tolak dengan modal konfirmasi
 
-### Premium Partners
+### Validasi & Business Rules
 
-- **[Vehikl](https://vehikl.com/)**
-- **[Tighten Co.](https://tighten.co)**
-- **[WebReinvent](https://webreinvent.com/)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel/)**
-- **[Cyber-Duck](https://cyber-duck.co.uk)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Jump24](https://jump24.co.uk)**
-- **[Redberry](https://redberry.international/laravel/)**
-- **[Active Logic](https://activelogic.com)**
-- **[byte5](https://byte5.de)**
-- **[OP.GG](https://op.gg)**
+| Aturan | Keterangan |
+|--------|-----------|
+| NIK | 16 digit angka, wajib diisi |
+| Pendapatan minimal | Rp 1.000.000 |
+| Nominal maksimal | Rp 200.000.000 |
+| Tenor maksimal | 24 bulan |
+| Maks. pengajuan | 3 kali per nasabah (berdasarkan NIK) |
+| Status awal | Pending |
+| Approve / Reject | Hanya bisa dari status Pending |
 
-## Contributing
+---
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+## Cara Menjalankan Project
 
-## Code of Conduct
+### Prasyarat
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+- [Laragon](https://laragon.org/) (bundel PHP 8.2, MySQL, Apache/Nginx)
+- [Composer](https://getcomposer.org/)
+- [Node.js](https://nodejs.org/) v18+
 
-## Security Vulnerabilities
+### 1. Clone / Ekstrak Project
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+```bash
+git clone <repo-url> credit-app
+cd credit-app
+```
 
-## License
+### 2. Install Dependensi
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+```bash
+composer install
+npm install
+```
+
+### 3. Konfigurasi Environment
+
+```bash
+cp .env.example .env
+php artisan key:generate
+```
+
+Sesuaikan `.env`:
+
+```env
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=credit_app
+DB_USERNAME=root
+DB_PASSWORD=
+```
+
+### 4. Buat Database & Migrasi
+
+```sql
+CREATE DATABASE credit_app;
+```
+
+```bash
+php artisan migrate --seed
+```
+
+### 5. Jalankan Aplikasi
+
+**Via Laragon (direkomendasikan):**
+```
+http://credit-app.test
+```
+
+**Via Artisan (2 terminal terpisah):**
+```bash
+php artisan serve
+npm run dev
+```
+
+---
+
+## Struktur Project
+
+```
+credit-app/
+├── app/
+│   ├── Http/
+│   │   ├── Controllers/
+│   │   │   └── PengajuanController.php    # dashboard, index, store, show, approve, reject
+│   │   └── Requests/
+│   │       └── StorePengajuanRequest.php  # validasi form + max 3 pengajuan per NIK
+│   └── Models/
+│       └── Pengajuan.php                  # model + accessor tagihan & jadwal cicilan
+├── database/
+│   ├── migrations/
+│   │   └── ..._create_pengajuans_table.php
+│   └── seeders/
+│       ├── DatabaseSeeder.php
+│       └── PengajuanSeeder.php
+├── resources/
+│   └── js/
+│       ├── app.jsx                        # entry point + Inertia setup + progress bar
+│       ├── Layouts/
+│       │   └── AppLayout.jsx              # sidebar collapse + topbar + skeleton loading
+│       ├── Components/
+│       │   ├── StatusBadge.jsx            # badge Pending / Disetujui / Ditolak
+│       │   ├── FlashMessage.jsx           # toast dari Laravel flash session
+│       │   ├── Modal.jsx                  # modal generik (ESC + backdrop close)
+│       │   ├── ConfirmModal.jsx           # modal konfirmasi approve / reject
+│       │   └── PengajuanForm.jsx          # form + simulasi cicilan live
+│       ├── Pages/
+│       │   ├── Dashboard/
+│       │   │   └── Index.jsx              # ringkasan stats + tabel pengajuan terbaru
+│       │   └── Pengajuan/
+│       │       ├── Index.jsx              # daftar + filter + search + sort + aksi ⋯
+│       │       └── Show.jsx               # detail + jadwal cicilan collapsible
+│       └── utils/
+│           └── format.js                  # fmtRupiah, toRawNumber, toDisplayNumber
+└── routes/
+    └── web.php
+```
+
+---
+
+## Routes
+
+| Method | URI                          | Keterangan               |
+|--------|------------------------------|--------------------------|
+| GET    | `/`                          | Redirect ke dashboard    |
+| GET    | `/dashboard`                 | Halaman dashboard        |
+| GET    | `/pengajuan`                 | Daftar semua pengajuan   |
+| POST   | `/pengajuan`                 | Simpan pengajuan baru    |
+| GET    | `/pengajuan/{id}`            | Detail pengajuan         |
+| PATCH  | `/pengajuan/{id}/approve`    | Setujui pengajuan        |
+| PATCH  | `/pengajuan/{id}/reject`     | Tolak pengajuan          |
+
+---
+
+## Alur Penggunaan
+
+```
+[ Dashboard ]
+  ├─ Lihat ringkasan statistik
+  └─ Klik "Lihat semua" → halaman Pengajuan
+
+[ Daftar Pengajuan ]
+  ├─ Klik kartu statistik    → filter tabel per status
+  ├─ Ketik di search box     → cari NIK / nama / tipe
+  ├─ Klik header kolom       → sort ascending / descending
+  ├─ Klik "Pengajuan Baru"   → buka modal form
+  │    └─ Isi NIK, nama, nominal + tenor → simulasi cicilan muncul otomatis
+  └─ Klik ⋯ di baris         → menu aksi
+       ├─ Detail              → halaman Show
+       ├─ Setujui             → modal konfirmasi → status jadi Disetujui
+       └─ Tolak               → modal konfirmasi → status jadi Ditolak
+
+[ Detail Pengajuan ]
+  ├─ Info lengkap nasabah + NIK
+  ├─ Kalkulasi tagihan + rasio cicilan/pendapatan
+  ├─ Jadwal cicilan bulanan (klik untuk expand semua)
+  └─ Tombol Setujui / Tolak (hanya jika masih Pending)
+```
+
+---
+
+*Dibuat untuk keperluan Coding Test IT Department — PT Capella Multidana.*
