@@ -10,6 +10,7 @@ return new class extends Migration
     {
         Schema::create('pengajuans', function (Blueprint $table) {
             $table->id();
+            $table->string('nik', 16)->index();
             $table->string('nama');
             $table->enum('tipe', ['Sepeda Motor', 'Mobil', 'Multiguna']);
             $table->bigInteger('nominal');

@@ -2,9 +2,12 @@
 
 use App\Http\Controllers\PengajuanController;
 use Illuminate\Support\Facades\Route;
-use Inertia\Inertia;
 
-Route::get('/', [PengajuanController::class, 'index'])->name('pengajuan.index');
+Route::get('/', fn () => redirect()->route('dashboard'));
+
+Route::get('/dashboard', [PengajuanController::class, 'dashboard'])->name('dashboard');
+
+Route::get('/pengajuan', [PengajuanController::class, 'index'])->name('pengajuan.index');
 Route::post('/pengajuan', [PengajuanController::class, 'store'])->name('pengajuan.store');
 Route::get('/pengajuan/{pengajuan}', [PengajuanController::class, 'show'])->name('pengajuan.show');
 Route::patch('/pengajuan/{pengajuan}/approve', [PengajuanController::class, 'approve'])->name('pengajuan.approve');

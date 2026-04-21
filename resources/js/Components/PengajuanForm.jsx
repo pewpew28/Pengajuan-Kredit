@@ -1,8 +1,13 @@
 import { useForm } from '@inertiajs/react';
 import { useMemo } from 'react';
-import { User, Tag, Banknote, Clock, Wallet, FileText, ChevronDown, AlertCircle, TrendingUp, Calculator } from 'lucide-react';
+import { toast } from 'sonner';
+import {
+    User, CreditCard, Tag, Banknote, Clock, Wallet,
+    FileText, ChevronDown, AlertCircle, Calculator,
+} from 'lucide-react';
+import { fmtRupiah, toRawNumber, toDisplayNumber } from '@/utils/format';
 
-// ─── Constants ───────────────────────────────────────────────────────────────
+// ─── Constants ────────────────────────────────────────────────────────────────
 
 const TIPE_OPTIONS = [
     { value: 'Sepeda Motor', label: 'Sepeda Motor' },
@@ -12,42 +17,47 @@ const TIPE_OPTIONS = [
 
 const TENOR_PRESETS = [6, 12, 18, 24];
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// ─── Primitive UI pieces ──────────────────────────────────────────────────────
 
-const fmt = (v) =>
-    new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(v || 0);
-
-const toRaw = (s) => parseInt(String(s).replace(/\D/g, '') || '0', 10);
-
-const toDisplay = (raw) =>
-    raw ? String(raw).replace(/\D/g, '').replace(/\B(?=(\d{3})+(?!\d))/g, '.') : '';
-
-// ─── Sub-components ──────────────────────────────────────────────────────────
-
-function Label({ children }) {
-    return <label className="block text-xs font-semibold text-slate-600 mb-1.5">{children}</label>;
+function FieldLabel({ children }) {
+    return (
+        <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+            {children}
+        </label>
+    );
 }
 
 function FieldError({ msg }) {
     if (!msg) return null;
     return (
         <p className="flex items-center gap-1 text-xs text-red-600 mt-1.5">
-            <AlertCircle size={11} /> {msg}
+            <AlertCircle size={11} />
+            {msg}
         </p>
     );
 }
 
-function Input({ icon: Icon, error, className = '', ...props }) {
+/**
+ * Input text dengan ikon opsional di sisi kiri dan styling error.
+ */
+function IconInput({ icon: Icon, error, className = '', ...props }) {
     return (
         <div className="relative">
-            {Icon && <span className="absolute inset-y-0 left-3 flex items-center pointer-events-none text-slate-400"><Icon size={14} /></span>}
+            {Icon && (
+                <span className="absolute inset-y-0 left-3 flex items-center pointer-events-none text-slate-400">
+                    <Icon size={14} />
+                </span>
+            )}
             <input
                 {...props}
                 className={`
                     w-full bg-slate-50 border rounded-xl text-sm text-slate-900 placeholder-slate-400
                     focus:outline-none focus:ring-2 focus:bg-white transition
                     ${Icon ? 'pl-9' : 'pl-3'} pr-3 py-2.5
-                    ${error ? 'border-red-300 focus:ring-red-100 focus:border-red-400' : 'border-slate-200 focus:ring-blue-100 focus:border-blue-400'}
+                    ${error
+                        ? 'border-red-300 focus:ring-red-100 focus:border-red-400'
+                        : 'border-slate-200 focus:ring-blue-100 focus:border-blue-400'
+                    }
                     ${className}
                 `}
             />
@@ -55,57 +65,61 @@ function Input({ icon: Icon, error, className = '', ...props }) {
     );
 }
 
-// ─── Calculator Preview ───────────────────────────────────────────────────────
+// ─── Simulasi Cicilan (live preview) ─────────────────────────────────────────
 
-function CalcPreview({ nominal, tenor, pendapatan }) {
-    const tagihanPerBulan = useMemo(() => {
-        if (!nominal || !tenor) return 0;
-        return Math.round(nominal / tenor);
-    }, [nominal, tenor]);
+/**
+ * Panel yang muncul secara live saat nominal & tenor diisi.
+ * Menampilkan tagihan per bulan, total kewajiban, dan rasio cicilan/pendapatan.
+ */
+function SimulasiCicilan({ nominal, tenor, pendapatan }) {
+    const tagihanPerBulan = useMemo(
+        () => (nominal && tenor ? Math.round(nominal / tenor) : 0),
+        [nominal, tenor],
+    );
 
-    const ratio = useMemo(() => {
-        if (!pendapatan || !tagihanPerBulan) return 0;
-        return (tagihanPerBulan / pendapatan) * 100;
-    }, [tagihanPerBulan, pendapatan]);
+    const ratio = useMemo(
+        () => (pendapatan && tagihanPerBulan ? (tagihanPerBulan / pendapatan) * 100 : 0),
+        [tagihanPerBulan, pendapatan],
+    );
 
-    const ratioColor =
-        ratio === 0    ? 'bg-slate-300' :
-        ratio > 50     ? 'bg-red-500'   :
-        ratio > 30     ? 'bg-amber-500' :
-                         'bg-emerald-500';
+    const barColor =
+        ratio === 0 ? 'bg-slate-300' :
+        ratio > 50  ? 'bg-red-500'   :
+        ratio > 30  ? 'bg-amber-500' :
+                      'bg-emerald-500';
 
-    const ratioTextColor =
-        ratio === 0    ? 'text-slate-400' :
-        ratio > 50     ? 'text-red-600'   :
-        ratio > 30     ? 'text-amber-600' :
-                         'text-emerald-600';
+    const textColor =
+        ratio === 0 ? 'text-slate-400' :
+        ratio > 50  ? 'text-red-600'   :
+        ratio > 30  ? 'text-amber-600' :
+                      'text-emerald-600';
 
     const ratioLabel =
-        ratio === 0    ? '—' :
-        ratio > 50     ? 'Melebihi batas aman' :
-        ratio > 30     ? 'Perlu diperhatikan'  :
-                         'Dalam batas aman';
+        ratio === 0 ? '—'                    :
+        ratio > 50  ? 'Melebihi batas aman'  :
+        ratio > 30  ? 'Perlu diperhatikan'   :
+                      'Dalam batas aman';
 
     if (!nominal && !tenor) return null;
 
     return (
         <div className="rounded-xl border border-blue-100 bg-blue-50/60 p-4 space-y-3">
-            <div className="flex items-center gap-1.5 text-xs font-semibold text-blue-700">
+            <p className="flex items-center gap-1.5 text-xs font-semibold text-blue-700">
                 <Calculator size={13} />
                 Simulasi Cicilan
-            </div>
+            </p>
 
             <div className="grid grid-cols-2 gap-3">
                 <div className="bg-white rounded-lg px-3 py-2.5 border border-slate-100">
                     <p className="text-xs text-slate-400">Tagihan / Bulan</p>
                     <p className="text-sm font-bold text-slate-800 mt-0.5 tabular-nums">
-                        {tagihanPerBulan ? fmt(tagihanPerBulan) : '—'}
+                        {tagihanPerBulan ? fmtRupiah(tagihanPerBulan) : '—'}
                     </p>
                 </div>
                 <div className="bg-white rounded-lg px-3 py-2.5 border border-slate-100">
                     <p className="text-xs text-slate-400">Total Kewajiban</p>
                     <p className="text-sm font-bold text-slate-800 mt-0.5 tabular-nums">
-                        {nominal ? fmt(nominal) : '—'}
+                        {nominal ? fmtRupiah(nominal) : '—'}
                     </p>
                 </div>
             </div>
@@ -114,11 +128,13 @@ function CalcPreview({ nominal, tenor, pendapatan }) {
                 <div>
                     <div className="flex justify-between items-center mb-1.5">
                         <span className="text-xs text-slate-500">Rasio Cicilan / Pendapatan</span>
-                        <span className={`text-xs font-bold ${ratioTextColor}`}>{ratio.toFixed(1)}% — {ratioLabel}</span>
+                        <span className={`text-xs font-bold ${textColor}`}>
+                            {ratio.toFixed(1)}% — {ratioLabel}
+                        </span>
                     </div>
                     <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden">
                         <div
-                            className={`h-full rounded-full transition-all duration-500 ${ratioColor}`}
+                            className={`h-full rounded-full transition-all duration-500 ${barColor}`}
                             style={{ width: `${Math.min(ratio, 100)}%` }}
                         />
                     </div>
@@ -130,8 +146,15 @@ function CalcPreview({ nominal, tenor, pendapatan }) {
 
 // ─── Main Form ────────────────────────────────────────────────────────────────
 
+/**
+ * Form pengajuan kredit baru.
+ * Melakukan POST ke /pengajuan dan memanggil onClose() setelah berhasil.
+ *
+ * @param {{ onClose?: () => void }} props
+ */
 export default function PengajuanForm({ onClose }) {
     const { data, setData, post, processing, errors, reset } = useForm({
+        nik:        '',
         nama:       '',
         tipe:       'Sepeda Motor',
         nominal:    '',
@@ -143,31 +166,54 @@ export default function PengajuanForm({ onClose }) {
     const handleSubmit = (e) => {
         e.preventDefault();
         post('/pengajuan', {
-            onSuccess: () => { reset(); onClose?.(); },
+            onSuccess: () => {
+                reset();
+                onClose?.();
+            },
+            onError: (errs) => {
+                // Tampilkan setiap pesan error sebagai toast individual
+                Object.values(errs).forEach(msg => toast.error(msg));
+            },
         });
     };
 
     return (
         <form onSubmit={handleSubmit} className="space-y-5">
 
+            {/* NIK */}
+            <div>
+                <FieldLabel>NIK (Nomor Induk Kependudukan)</FieldLabel>
+                <IconInput
+                    icon={CreditCard}
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={16}
+                    value={data.nik}
+                    onChange={e => setData('nik', e.target.value.replace(/\D/g, ''))}
+                    placeholder="16 digit sesuai KTP"
+                    error={errors.nik}
+                    autoFocus
+                />
+                <FieldError msg={errors.nik} />
+            </div>
+
             {/* Nama */}
             <div>
-                <Label>Nama Lengkap Nasabah</Label>
-                <Input
+                <FieldLabel>Nama Lengkap Nasabah</FieldLabel>
+                <IconInput
                     icon={User}
                     type="text"
                     value={data.nama}
                     onChange={e => setData('nama', e.target.value)}
                     placeholder="Sesuai KTP"
                     error={errors.nama}
-                    autoFocus
                 />
                 <FieldError msg={errors.nama} />
             </div>
 
             {/* Tipe */}
             <div>
-                <Label>Tipe Pengajuan</Label>
+                <FieldLabel>Tipe Pengajuan</FieldLabel>
                 <div className="relative">
                     <span className="absolute inset-y-0 left-3 flex items-center pointer-events-none text-slate-400">
                         <Tag size={14} />
@@ -175,10 +221,19 @@ export default function PengajuanForm({ onClose }) {
                     <select
                         value={data.tipe}
                         onChange={e => setData('tipe', e.target.value)}
-                        className={`w-full bg-slate-50 border rounded-xl text-sm text-slate-900 pl-9 pr-8 py-2.5 appearance-none focus:outline-none focus:ring-2 focus:bg-white transition
-                            ${errors.tipe ? 'border-red-300 focus:ring-red-100' : 'border-slate-200 focus:ring-blue-100 focus:border-blue-400'}`}
+                        className={`
+                            w-full bg-slate-50 border rounded-xl text-sm text-slate-900
+                            pl-9 pr-8 py-2.5 appearance-none
+                            focus:outline-none focus:ring-2 focus:bg-white transition
+                            ${errors.tipe
+                                ? 'border-red-300 focus:ring-red-100'
+                                : 'border-slate-200 focus:ring-blue-100 focus:border-blue-400'
+                            }
+                        `}
                     >
-                        {TIPE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                        {TIPE_OPTIONS.map(o => (
+                            <option key={o.value} value={o.value}>{o.label}</option>
+                        ))}
                     </select>
                     <span className="absolute inset-y-0 right-3 flex items-center pointer-events-none text-slate-400">
                         <ChevronDown size={14} />
@@ -189,13 +244,13 @@ export default function PengajuanForm({ onClose }) {
 
             {/* Nominal */}
             <div>
-                <Label>Nominal Pengajuan</Label>
-                <Input
+                <FieldLabel>Nominal Pengajuan</FieldLabel>
+                <IconInput
                     icon={Banknote}
                     type="text"
                     inputMode="numeric"
-                    value={toDisplay(data.nominal)}
-                    onChange={e => setData('nominal', toRaw(e.target.value))}
+                    value={toDisplayNumber(data.nominal)}
+                    onChange={e => setData('nominal', toRawNumber(e.target.value))}
                     placeholder="Maks. Rp 200.000.000"
                     error={errors.nominal}
                 />
@@ -204,8 +259,7 @@ export default function PengajuanForm({ onClose }) {
 
             {/* Tenor */}
             <div>
-                <Label>Tenor (Bulan)</Label>
-                {/* Quick-pick buttons */}
+                <FieldLabel>Tenor (Bulan)</FieldLabel>
                 <div className="flex gap-2 mb-2">
                     {TENOR_PRESETS.map(t => (
                         <button
@@ -222,12 +276,12 @@ export default function PengajuanForm({ onClose }) {
                         </button>
                     ))}
                 </div>
-                <Input
+                <IconInput
                     icon={Clock}
                     type="number"
                     value={data.tenor}
                     onChange={e => setData('tenor', e.target.value)}
-                    min="1" max="24"
+                    min="1"
                     placeholder="1 – 24 bulan"
                     error={errors.tenor}
                 />
@@ -236,21 +290,21 @@ export default function PengajuanForm({ onClose }) {
 
             {/* Pendapatan */}
             <div>
-                <Label>Pendapatan Bulanan</Label>
-                <Input
+                <FieldLabel>Pendapatan Bulanan</FieldLabel>
+                <IconInput
                     icon={Wallet}
                     type="text"
                     inputMode="numeric"
-                    value={toDisplay(data.pendapatan)}
-                    onChange={e => setData('pendapatan', toRaw(e.target.value))}
+                    value={toDisplayNumber(data.pendapatan)}
+                    onChange={e => setData('pendapatan', toRawNumber(e.target.value))}
                     placeholder="Min. Rp 1.000.000"
                     error={errors.pendapatan}
                 />
                 <FieldError msg={errors.pendapatan} />
             </div>
 
-            {/* Live Calculator Preview */}
-            <CalcPreview
+            {/* Live calculator */}
+            <SimulasiCicilan
                 nominal={data.nominal}
                 tenor={Number(data.tenor)}
                 pendapatan={data.pendapatan}
@@ -258,10 +312,9 @@ export default function PengajuanForm({ onClose }) {
 
             {/* Catatan */}
             <div>
-                <Label>
-                    Catatan{' '}
-                    <span className="font-normal text-slate-400">(opsional)</span>
-                </Label>
+                <FieldLabel>
+                    Catatan <span className="font-normal text-slate-400">(opsional)</span>
+                </FieldLabel>
                 <div className="relative">
                     <span className="absolute top-2.5 left-3 pointer-events-none text-slate-400">
                         <FileText size={14} />
@@ -277,7 +330,7 @@ export default function PengajuanForm({ onClose }) {
                 <FieldError msg={errors.catatan} />
             </div>
 
-            {/* Rules hint */}
+            {/* Ketentuan */}
             <div className="flex gap-2.5 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
                 <AlertCircle size={14} className="text-amber-500 mt-0.5 shrink-0" />
                 <ul className="text-xs text-amber-700 space-y-0.5">
@@ -288,7 +341,7 @@ export default function PengajuanForm({ onClose }) {
                 </ul>
             </div>
 
-            {/* Footer */}
+            {/* Actions */}
             <div className="flex justify-end gap-2.5 pt-1 border-t border-slate-100">
                 {onClose && (
                     <button

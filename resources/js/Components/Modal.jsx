@@ -1,16 +1,30 @@
 import { useEffect } from 'react';
 import { X } from 'lucide-react';
 
-const SIZES = { sm: 'max-w-sm', md: 'max-w-lg', lg: 'max-w-2xl', xl: 'max-w-4xl' };
+const SIZE_CLASS = { sm: 'max-w-sm', md: 'max-w-lg', lg: 'max-w-2xl', xl: 'max-w-4xl' };
 
+/**
+ * Modal generik yang dapat digunakan ulang di seluruh aplikasi.
+ * Mendukung penutupan via tombol ✕, klik backdrop, atau tombol Escape.
+ *
+ * @param {{
+ *   show:    boolean,
+ *   onClose: () => void,
+ *   title:   string,
+ *   children: React.ReactNode,
+ *   size?:   'sm' | 'md' | 'lg' | 'xl'
+ * }} props
+ */
 export default function Modal({ show, onClose, title, children, size = 'md' }) {
     useEffect(() => {
         if (!show) return;
-        const onKey = (e) => e.key === 'Escape' && onClose?.();
-        document.addEventListener('keydown', onKey);
+
+        const handleKey = (e) => e.key === 'Escape' && onClose();
+        document.addEventListener('keydown', handleKey);
         document.body.style.overflow = 'hidden';
+
         return () => {
-            document.removeEventListener('keydown', onKey);
+            document.removeEventListener('keydown', handleKey);
             document.body.style.overflow = '';
         };
     }, [show, onClose]);
@@ -23,19 +37,20 @@ export default function Modal({ show, onClose, title, children, size = 'md' }) {
                 className="absolute inset-0 bg-black/50 backdrop-blur-sm"
                 onClick={onClose}
             />
-            <div className={`relative bg-white rounded-2xl shadow-2xl w-full ${SIZES[size]} flex flex-col max-h-[92vh]`}>
+            <div className={`relative bg-white rounded-2xl shadow-2xl w-full ${SIZE_CLASS[size]} flex flex-col max-h-[92vh]`}>
                 {/* Header */}
                 <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0">
                     <h2 className="text-sm font-bold text-slate-800">{title}</h2>
                     <button
                         onClick={onClose}
+                        aria-label="Tutup modal"
                         className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
-                        aria-label="Tutup"
                     >
                         <X size={15} />
                     </button>
                 </div>
-                {/* Body */}
+
+                {/* Scrollable body */}
                 <div className="overflow-y-auto flex-1 px-6 py-5" style={{ scrollbarWidth: 'none' }}>
                     {children}
                 </div>

@@ -1,35 +1,55 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
 import {
     Plus, FileText, Clock, CheckCircle2, XCircle,
-    Search, ChevronUp, ChevronDown as ChevDown, Filter,
+    Search, ChevronUp, ChevronDown as ChevronDownIcon, Filter,
+    MoreHorizontal, Eye, CheckCircle, XCircle as XCircleIcon,
 } from 'lucide-react';
 import AppLayout from '@/Layouts/AppLayout';
 import StatusBadge from '@/Components/StatusBadge';
 import Modal from '@/Components/Modal';
 import ConfirmModal from '@/Components/ConfirmModal';
 import PengajuanForm from '@/Components/PengajuanForm';
+import { fmtRupiah } from '@/utils/format';
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── Constants ────────────────────────────────────────────────────────────────
 
-const fmt = (v) =>
-    new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(v);
+const STATUS_FILTERS = ['Semua', 'Pending', 'Disetujui', 'Ditolak'];
 
-function SortIcon({ col, sortBy, sortDir }) {
-    if (sortBy !== col) return <span className="text-slate-300 ml-1"><ChevDown size={12} /></span>;
-    return sortDir === 'asc'
-        ? <ChevronUp size={12} className="text-blue-600 ml-1" />
-        : <ChevDown size={12} className="text-blue-600 ml-1" />;
-}
+/** Warna aktif untuk setiap kartu statistik berdasarkan status filter. */
+const STAT_COLORS = {
+    Semua:     { activeBg: 'bg-slate-50',   activeBorder: 'border-slate-300',   ring: 'ring-slate-300',   iconBg: 'bg-slate-200',   iconText: 'text-slate-700',   labelText: 'text-slate-700'   },
+    Pending:   { activeBg: 'bg-amber-50',   activeBorder: 'border-amber-300',   ring: 'ring-amber-200',   iconBg: 'bg-amber-100',   iconText: 'text-amber-600',   labelText: 'text-amber-700'   },
+    Disetujui: { activeBg: 'bg-emerald-50', activeBorder: 'border-emerald-300', ring: 'ring-emerald-200', iconBg: 'bg-emerald-100', iconText: 'text-emerald-600', labelText: 'text-emerald-700' },
+    Ditolak:   { activeBg: 'bg-red-50',     activeBorder: 'border-red-300',     ring: 'ring-red-200',     iconBg: 'bg-red-100',     iconText: 'text-red-500',     labelText: 'text-red-600'     },
+};
 
-// ─── Stats Card ───────────────────────────────────────────────────────────────
+/** Definisi kolom tabel beserta flag sortable. */
+const TABLE_COLS = [
+    { key: 'nik',               label: 'NIK',         sortable: false },
+    { key: 'nama',              label: 'Nama',        sortable: true  },
+    { key: 'tipe',              label: 'Tipe',        sortable: true  },
+    { key: 'nominal',           label: 'Nominal',     sortable: true  },
+    { key: 'tenor',             label: 'Tenor',       sortable: false },
+    { key: 'tagihan_per_bulan', label: 'Tagihan/Bln', sortable: true  },
+    { key: 'tanggal_pengajuan', label: 'Tanggal',     sortable: false },
+    { key: 'status',            label: 'Status',      sortable: true  },
+    { key: 'aksi',              label: 'Aksi',        sortable: false },
+];
 
+// ─── Sub-components ───────────────────────────────────────────────────────────
+
+/**
+ * Kartu statistik yang berfungsi sebagai tombol filter tabel.
+ */
 function StatCard({ label, value, icon: Icon, color, active, onClick }) {
     return (
         <button
             onClick={onClick}
             className={`w-full text-left rounded-xl border p-4 flex items-center gap-3 transition hover:shadow-md ${
-                active ? `${color.activeBorder} ${color.activeBg} ring-2 ${color.ring}` : 'bg-white border-slate-200 hover:border-slate-300'
+                active
+                    ? `${color.activeBorder} ${color.activeBg} ring-2 ${color.ring}`
+                    : 'bg-white border-slate-200 hover:border-slate-300'
             }`}
         >
             <div className={`p-2.5 rounded-xl ${active ? color.iconBg : 'bg-slate-100'}`}>
@@ -37,32 +57,96 @@ function StatCard({ label, value, icon: Icon, color, active, onClick }) {
             </div>
             <div>
                 <p className="text-2xl font-extrabold text-slate-900 leading-none">{value}</p>
-                <p className={`text-xs font-medium mt-0.5 ${active ? color.labelText : 'text-slate-500'}`}>{label}</p>
+                <p className={`text-xs font-medium mt-0.5 ${active ? color.labelText : 'text-slate-500'}`}>
+                    {label}
+                </p>
             </div>
         </button>
     );
 }
 
+/**
+ * Ikon panah untuk indikator kolom yang sedang diurutkan.
+ */
+function SortIndicator({ col, sortBy, sortDir }) {
+    if (sortBy !== col) {
+        return <ChevronDownIcon size={12} className="text-slate-300 ml-1" />;
+    }
+    return sortDir === 'asc'
+        ? <ChevronUp size={12} className="text-blue-600 ml-1" />
+        : <ChevronDownIcon size={12} className="text-blue-600 ml-1" />;
+}
+
+function ActionMenu({ pengajuan, onApprove, onReject }) {
+    const [open, setOpen] = useState(false);
+    const ref = useRef(null);
+
+    useEffect(() => {
+        const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+        document.addEventListener('mousedown', handler);
+        return () => document.removeEventListener('mousedown', handler);
+    }, []);
+
+    return (
+        <div ref={ref} className="relative">
+            <button
+                onClick={() => setOpen(o => !o)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition"
+            >
+                <MoreHorizontal size={16} />
+            </button>
+
+            {open && (
+                <div className="absolute right-0 top-full mt-1 w-40 bg-white border border-slate-200 rounded-xl shadow-lg z-20 py-1 overflow-hidden">
+                    <Link
+                        href={`/pengajuan/${pengajuan.id}`}
+                        onClick={() => setOpen(false)}
+                        className="flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition"
+                    >
+                        <Eye size={13} className="text-blue-500" />
+                        Detail
+                    </Link>
+                    {pengajuan.status === 'Pending' && (
+                        <>
+                            <button
+                                onClick={() => { setOpen(false); onApprove(); }}
+                                className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 transition"
+                            >
+                                <CheckCircle size={13} className="text-emerald-500" />
+                                Setujui
+                            </button>
+                            <button
+                                onClick={() => { setOpen(false); onReject(); }}
+                                className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 transition"
+                            >
+                                <XCircleIcon size={13} className="text-red-400" />
+                                Tolak
+                            </button>
+                        </>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-const FILTERS = ['Semua', 'Pending', 'Disetujui', 'Ditolak'];
-
-const STAT_COLORS = {
-    Semua:     { activeBg: 'bg-slate-50',    activeBorder: 'border-slate-300',   ring: 'ring-slate-300',   iconBg: 'bg-slate-200',    iconText: 'text-slate-700',    labelText: 'text-slate-700'    },
-    Pending:   { activeBg: 'bg-amber-50',    activeBorder: 'border-amber-300',   ring: 'ring-amber-200',   iconBg: 'bg-amber-100',    iconText: 'text-amber-600',    labelText: 'text-amber-700'    },
-    Disetujui: { activeBg: 'bg-emerald-50',  activeBorder: 'border-emerald-300', ring: 'ring-emerald-200', iconBg: 'bg-emerald-100',  iconText: 'text-emerald-600',  labelText: 'text-emerald-700'  },
-    Ditolak:   { activeBg: 'bg-red-50',      activeBorder: 'border-red-300',     ring: 'ring-red-200',     iconBg: 'bg-red-100',      iconText: 'text-red-500',      labelText: 'text-red-600'      },
-};
-
+/**
+ * Halaman utama daftar pengajuan kredit.
+ * Fitur: filter status, pencarian, sorting kolom, approve/reject inline.
+ *
+ * @param {{ pengajuans: Array }} props - data dari Inertia (PengajuanController::index)
+ */
 export default function Index({ pengajuans }) {
-    const [showForm,  setShowForm]  = useState(false);
-    const [filter,    setFilter]    = useState('Semua');
-    const [search,    setSearch]    = useState('');
-    const [sortBy,    setSortBy]    = useState('tanggal_pengajuan');
-    const [sortDir,   setSortDir]   = useState('desc');
-    const [confirm,   setConfirm]   = useState(null); // { type, id, nama }
+    const [showForm, setShowForm] = useState(false);
+    const [filter,   setFilter]   = useState('Semua');
+    const [search,   setSearch]   = useState('');
+    const [sortBy,   setSortBy]   = useState('tanggal_pengajuan');
+    const [sortDir,  setSortDir]  = useState('desc');
+    const [confirm,  setConfirm]  = useState(null); // { type: 'approve'|'reject', id, nama }
 
-    // ── Derived data ──────────────────────────────────────────────────────────
+    // ── Computed counts per status ────────────────────────────────────────────
     const counts = useMemo(() => ({
         Semua:     pengajuans.length,
         Pending:   pengajuans.filter(p => p.status === 'Pending').length,
@@ -70,53 +154,45 @@ export default function Index({ pengajuans }) {
         Ditolak:   pengajuans.filter(p => p.status === 'Ditolak').length,
     }), [pengajuans]);
 
-    const processed = useMemo(() => {
-        let list = [...pengajuans];
-
-        if (filter !== 'Semua') list = list.filter(p => p.status === filter);
+    // ── Filter → search → sort pipeline ──────────────────────────────────────
+    const rows = useMemo(() => {
+        let list = filter !== 'Semua'
+            ? pengajuans.filter(p => p.status === filter)
+            : [...pengajuans];
 
         if (search.trim()) {
             const q = search.toLowerCase();
             list = list.filter(p =>
                 p.nama.toLowerCase().includes(q) ||
-                p.tipe.toLowerCase().includes(q)
+                p.tipe.toLowerCase().includes(q) ||
+                p.nik.includes(q),
             );
         }
 
-        list.sort((a, b) => {
-            let va = a[sortBy], vb = b[sortBy];
+        return list.sort((a, b) => {
+            let va = a[sortBy];
+            let vb = b[sortBy];
             if (typeof va === 'string') va = va.toLowerCase();
             if (typeof vb === 'string') vb = vb.toLowerCase();
             if (va < vb) return sortDir === 'asc' ? -1 : 1;
             if (va > vb) return sortDir === 'asc' ?  1 : -1;
             return 0;
         });
-
-        return list;
     }, [pengajuans, filter, search, sortBy, sortDir]);
 
     // ── Handlers ──────────────────────────────────────────────────────────────
     const handleSort = (col) => {
-        if (sortBy === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
-        else { setSortBy(col); setSortDir('asc'); }
+        setSortBy(col);
+        setSortDir(prev => sortBy === col && prev === 'asc' ? 'desc' : 'asc');
     };
 
     const handleConfirm = () => {
         if (!confirm) return;
-        router.patch(`/pengajuan/${confirm.id}/${confirm.type === 'approve' ? 'approve' : 'reject'}`);
+        const action = confirm.type === 'approve' ? 'approve' : 'reject';
+        router.patch(`/pengajuan/${confirm.id}/${action}`);
     };
 
-    // ── Column defs ───────────────────────────────────────────────────────────
-    const COLS = [
-        { key: 'nama',               label: 'Nama',         sortable: true  },
-        { key: 'tipe',               label: 'Tipe',         sortable: true  },
-        { key: 'nominal',            label: 'Nominal',      sortable: true  },
-        { key: 'tenor',              label: 'Tenor',        sortable: false },
-        { key: 'tagihan_per_bulan',  label: 'Tagihan/Bln',  sortable: true  },
-        { key: 'tanggal_pengajuan',  label: 'Tanggal',      sortable: false },
-        { key: 'status',             label: 'Status',       sortable: true  },
-        { key: 'aksi',               label: 'Aksi',         sortable: false },
-    ];
+    // ─────────────────────────────────────────────────────────────────────────
 
     return (
         <AppLayout
@@ -127,13 +203,13 @@ export default function Index({ pengajuans }) {
 
             <div className="space-y-5">
 
-                {/* ── Stats ── */}
+                {/* Stats — klik untuk filter */}
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                     {[
-                        { label: 'Semua',     icon: FileText    },
-                        { label: 'Pending',   icon: Clock       },
+                        { label: 'Semua',     icon: FileText     },
+                        { label: 'Pending',   icon: Clock        },
                         { label: 'Disetujui', icon: CheckCircle2 },
-                        { label: 'Ditolak',   icon: XCircle     },
+                        { label: 'Ditolak',   icon: XCircle      },
                     ].map(s => (
                         <StatCard
                             key={s.label}
@@ -147,12 +223,11 @@ export default function Index({ pengajuans }) {
                     ))}
                 </div>
 
-                {/* ── Table card ── */}
+                {/* Tabel */}
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
 
                     {/* Toolbar */}
                     <div className="px-5 py-3.5 border-b border-slate-100 flex flex-col sm:flex-row items-stretch sm:items-center gap-3 justify-between">
-                        {/* Search */}
                         <div className="relative max-w-xs w-full">
                             <span className="absolute inset-y-0 left-3 flex items-center pointer-events-none text-slate-400">
                                 <Search size={14} />
@@ -167,15 +242,20 @@ export default function Index({ pengajuans }) {
                         </div>
 
                         <div className="flex items-center gap-2 justify-between sm:justify-end">
-                            {/* Active filter chip */}
                             {filter !== 'Semua' && (
                                 <div className="flex items-center gap-1.5 text-xs text-slate-500">
                                     <Filter size={12} />
                                     <span className="font-medium">{filter}</span>
-                                    <button onClick={() => setFilter('Semua')} className="text-slate-400 hover:text-slate-600">✕</button>
+                                    <button
+                                        onClick={() => setFilter('Semua')}
+                                        className="text-slate-400 hover:text-slate-600"
+                                        aria-label="Hapus filter"
+                                    >
+                                        ✕
+                                    </button>
                                 </div>
                             )}
-                            <span className="text-xs text-slate-400">{processed.length} data</span>
+                            <span className="text-xs text-slate-400">{rows.length} data</span>
                             <button
                                 onClick={() => setShowForm(true)}
                                 className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl transition shadow-sm shadow-blue-200"
@@ -186,13 +266,16 @@ export default function Index({ pengajuans }) {
                         </div>
                     </div>
 
-                    {/* Table */}
-                    {processed.length === 0 ? (
+                    {/* Empty state */}
+                    {rows.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-20 text-slate-400">
                             <FileText size={40} className="mb-3 opacity-25" />
                             <p className="text-sm font-medium text-slate-500">Tidak ada data ditemukan</p>
                             <p className="text-xs mt-1">
-                                {search ? 'Coba ubah kata kunci pencarian' : 'Klik "Pengajuan Baru" untuk memulai'}
+                                {search
+                                    ? 'Coba ubah kata kunci pencarian'
+                                    : 'Klik "Pengajuan Baru" untuk memulai'
+                                }
                             </p>
                         </div>
                     ) : (
@@ -200,64 +283,62 @@ export default function Index({ pengajuans }) {
                             <table className="w-full text-sm">
                                 <thead>
                                     <tr className="bg-slate-50 border-b border-slate-100">
-                                        <th className="w-10 px-4 py-3 text-left text-xs font-semibold text-slate-400">#</th>
-                                        {COLS.map(col => (
+                                        <th className="w-10 px-4 py-3 text-left text-xs font-semibold text-slate-400">
+                                            #
+                                        </th>
+                                        {TABLE_COLS.map(col => (
                                             <th
                                                 key={col.key}
-                                                className={`px-4 py-3 text-left text-xs font-semibold text-slate-500 whitespace-nowrap ${col.sortable ? 'cursor-pointer hover:text-slate-700 select-none' : ''}`}
                                                 onClick={() => col.sortable && handleSort(col.key)}
+                                                className={`px-4 py-3 text-left text-xs font-semibold text-slate-500 whitespace-nowrap ${
+                                                    col.sortable ? 'cursor-pointer hover:text-slate-700 select-none' : ''
+                                                }`}
                                             >
                                                 <span className="inline-flex items-center">
                                                     {col.label}
-                                                    {col.sortable && <SortIcon col={col.key} sortBy={sortBy} sortDir={sortDir} />}
+                                                    {col.sortable && (
+                                                        <SortIndicator col={col.key} sortBy={sortBy} sortDir={sortDir} />
+                                                    )}
                                                 </span>
                                             </th>
                                         ))}
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {processed.map((p, i) => (
+                                    {rows.map((p, i) => (
                                         <tr
                                             key={p.id}
                                             className="border-t border-slate-100 hover:bg-slate-50/80 transition-colors"
                                         >
                                             <td className="px-4 py-3.5 text-xs text-slate-400 tabular-nums">{i + 1}</td>
+                                            <td className="px-4 py-3.5 text-xs text-slate-500 font-mono whitespace-nowrap">{p.nik}</td>
                                             <td className="px-4 py-3.5 font-semibold text-slate-800 whitespace-nowrap">{p.nama}</td>
                                             <td className="px-4 py-3.5">
                                                 <span className="text-xs font-semibold text-blue-600 bg-blue-50 border border-blue-100 px-2 py-0.5 rounded-md whitespace-nowrap">
                                                     {p.tipe}
                                                 </span>
                                             </td>
-                                            <td className="px-4 py-3.5 text-slate-700 tabular-nums whitespace-nowrap">{fmt(p.nominal)}</td>
-                                            <td className="px-4 py-3.5 text-slate-500 whitespace-nowrap">{p.tenor} bln</td>
-                                            <td className="px-4 py-3.5 font-semibold text-slate-800 tabular-nums whitespace-nowrap">{fmt(p.tagihan_per_bulan)}</td>
-                                            <td className="px-4 py-3.5 text-slate-400 text-xs whitespace-nowrap">{p.tanggal_pengajuan}</td>
-                                            <td className="px-4 py-3.5"><StatusBadge status={p.status} /></td>
+                                            <td className="px-4 py-3.5 text-slate-700 tabular-nums whitespace-nowrap">
+                                                {fmtRupiah(p.nominal)}
+                                            </td>
+                                            <td className="px-4 py-3.5 text-slate-500 whitespace-nowrap">
+                                                {p.tenor} bln
+                                            </td>
+                                            <td className="px-4 py-3.5 font-semibold text-slate-800 tabular-nums whitespace-nowrap">
+                                                {fmtRupiah(p.tagihan_per_bulan)}
+                                            </td>
+                                            <td className="px-4 py-3.5 text-slate-400 text-xs whitespace-nowrap">
+                                                {p.tanggal_pengajuan}
+                                            </td>
                                             <td className="px-4 py-3.5">
-                                                <div className="flex items-center gap-1.5 whitespace-nowrap">
-                                                    {p.status === 'Pending' && (
-                                                        <>
-                                                            <button
-                                                                onClick={() => setConfirm({ type: 'approve', id: p.id, nama: p.nama })}
-                                                                className="px-2.5 py-1 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition"
-                                                            >
-                                                                Setujui
-                                                            </button>
-                                                            <button
-                                                                onClick={() => setConfirm({ type: 'reject', id: p.id, nama: p.nama })}
-                                                                className="px-2.5 py-1 text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition"
-                                                            >
-                                                                Tolak
-                                                            </button>
-                                                        </>
-                                                    )}
-                                                    <Link
-                                                        href={`/pengajuan/${p.id}`}
-                                                        className="px-2.5 py-1 text-xs font-semibold text-blue-600 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition"
-                                                    >
-                                                        Detail
-                                                    </Link>
-                                                </div>
+                                                <StatusBadge status={p.status} />
+                                            </td>
+                                            <td className="px-4 py-3.5">
+                                                <ActionMenu
+                                                    pengajuan={p}
+                                                    onApprove={() => setConfirm({ type: 'approve', id: p.id, nama: p.nama })}
+                                                    onReject={() => setConfirm({ type: 'reject', id: p.id, nama: p.nama })}
+                                                />
                                             </td>
                                         </tr>
                                     ))}
@@ -268,7 +349,6 @@ export default function Index({ pengajuans }) {
                 </div>
             </div>
 
-            {/* Modals */}
             <Modal show={showForm} onClose={() => setShowForm(false)} title="Pengajuan Kredit Baru" size="md">
                 <PengajuanForm onClose={() => setShowForm(false)} />
             </Modal>

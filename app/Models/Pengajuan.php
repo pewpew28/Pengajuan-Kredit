@@ -2,15 +2,13 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 
 class Pengajuan extends Model
 {
-    use HasFactory;
-
     protected $fillable = [
+        'nik',
         'nama',
         'tipe',
         'nominal',
@@ -35,26 +33,30 @@ class Pengajuan extends Model
         );
     }
 
-    public function getJadwalCicilanAttribute(): array
+    protected function jadwalCicilan(): Attribute
     {
-        $jadwal     = [];
-        $perBulan   = $this->tagihan_per_bulan;
-        $startDate  = $this->tanggal_pengajuan->copy()->addMonth();
+        return Attribute::make(
+            get: function () {
+                $jadwal   = [];
+                $perBulan = $this->tagihan_per_bulan;
+                $mulai    = $this->tanggal_pengajuan->copy()->addMonth();
 
-        for ($i = 1; $i <= $this->tenor; $i++) {
-            $jadwal[] = [
-                'bulan'          => $i,
-                'tanggal'        => $startDate->copy()->addMonths($i - 1)->format('d M Y'),
-                'tagihan'        => $perBulan,
-                'sisa_pinjaman'  => max(0, $this->nominal - ($perBulan * $i)),
-            ];
-        }
+                for ($i = 1; $i <= $this->tenor; $i++) {
+                    $jadwal[] = [
+                        'bulan'         => $i,
+                        'tanggal'       => $mulai->copy()->addMonths($i - 1)->format('d M Y'),
+                        'tagihan'       => $perBulan,
+                        'sisa_pinjaman' => max(0, $this->nominal - ($perBulan * $i)),
+                    ];
+                }
 
-        return $jadwal;
+                return $jadwal;
+            },
+        );
     }
 
-    public static function countByName(string $nama): int
+    public static function countByNik(string $nik): int
     {
-        return self::where('nama', $nama)->count();
+        return self::where('nik', $nik)->count();
     }
 }
